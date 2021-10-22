@@ -5,3 +5,20 @@ gitea-ingress_gen.yaml
 cloudautomation/scripts/tenants.sh
 cloudautomation/monaco/.logs/*.*
 cloudautomation/scripts/.logs/*.*
+
+**key*
+
+## Terraform
+**/.terraform
+*.tfvars
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*tfplan*
+*.terraform.lock.hcl
+
+.DS_STore

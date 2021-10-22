@@ -3,6 +3,9 @@
 set -eu
 
 # Keptn Version Information
+REPO_FOLDER=~/ace-box/keptn-on-k3s
+TEMP_FOLDER=~/ace-box/tmp
+CUSTOMDOMAIN=${CUSTOMDOMAIN:-none}
 KEPTNVERSION=${KEPTNVERSION:-0.9.2}
 KEPTN_TYPE="controlplane"
 KEPTN_DELIVERYPLANE=false
@@ -62,6 +65,7 @@ CERT_EMAIL=${CERT_EMAIL:-none}
 LE_STAGE=${LE_STAGE:-none}
 XIP="false" 
 NIP="false"
+USECUSTDOMAIN="false"
 INSTALL_TYPE="all"  # "k3s", "keptn", "demo", "gitea"
 
 PROM="false"
@@ -228,7 +232,9 @@ function get_fqdn {
   if [[ "$FQDN" == "none" ]]; then
 
     FQDN="${MY_IP}"
-
+    if [[ "${USECUSTDOMAIN}" == "true" ]]; then
+      FQDN="${CUSTOMDOMAIN}"
+    fi
     if [[ "${LE_STAGE}" == "staging" ]] || [[ "${NIP}" == "true" ]]; then
       FQDN="$(get_nip_address "${MY_IP}")"
     fi
@@ -311,13 +317,14 @@ function get_oneagent {
   kubectl apply -f https://github.com/Dynatrace/dynatrace-oneagent-operator/releases/latest/download/dynatrace.com_oneagents.yaml 
   kubectl apply -f https://github.com/Dynatrace/dynatrace-oneagent-operator/releases/latest/download/dynatrace.com_oneagentapms.yaml
 
+
   sed -e 's~DT_TENANT~'"$DT_TENANT"'~' \
     -e 's~DT_API_TOKEN~'"$DT_API_TOKEN"'~' \
     -e 's~DT_PAAS_TOKEN~'"$DT_PAAS_TOKEN"'~' \
     -e 's~DT_HOST_GROUP~'"$KEPTN_TYPE"'~' \
     -e 's~KEPTN_TYPE~'"$KEPTN_TYPE"'~' \
     -e 's~KEPTN_STAGE~'"$KEPTN_EXECUTION_PLANE_STAGE_FILTER"'~' \
-    ./files/dynatrace/oneagent_values.yaml > oneagent_values.yaml
+    $REPO_FOLDER/files/dynatrace/oneagent_values.yaml > oneagent_values.yaml
 
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
   helm install dynatrace-oneagent-operator \
@@ -334,9 +341,9 @@ function get_oneagent {
 function get_helm {
   write_progress "Installing Helm 3"
 
-  curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
-  chmod 700 /tmp/get_helm.sh
-  /tmp/get_helm.sh
+  curl -fsSL -o $TEMP_FOLDER/get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+  chmod 700 $TEMP_FOLDER/get_helm.sh
+  $TEMP_FOLDER/get_helm.sh
 }
 
 function get_argorollouts {
@@ -372,11 +379,11 @@ function get_istio {
 
     write_progress "Configuring Istio Ingress Object"
     sed -e 's~issuer.placeholder~'"$CERTS"'~' \
-        ./files/istio/istio-ingress.yaml > istio-ingress_gen.yaml
+        $REPO_FOLDER/files/istio/istio-ingress.yaml > istio-ingress_gen.yaml
     "${K3SKUBECTL[@]}" apply -n istio-system -f istio-ingress_gen.yaml
     rm istio-ingress_gen.yaml
 
-    "${K3SKUBECTL[@]}" apply -n istio-system -f ./files/istio/istio-gateway.yaml
+    "${K3SKUBECTL[@]}" apply -n istio-system -f $REPO_FOLDER/files/istio/istio-gateway.yaml
   fi
 
   # Create ConfigMap Entry for keptn's helm service
@@ -532,20 +539,20 @@ function install_keptn {
     get_argorollouts
 
     # Install the Helm Service - and increase memory and cpu limits
-    curl -fsSL -o /tmp/helm.values.yaml https://raw.githubusercontent.com/keptn/keptn/release-${KEPTNVERSION}/helm-service/chart/values.yaml
-    yq w -i /tmp/helm.values.yaml "remoteControlPlane.enabled" "true"
-    yq w -i /tmp/helm.values.yaml "remoteControlPlane.api.hostname" "${KEPTN_CONTROL_PLANE_DOMAIN}"
-    yq w -i /tmp/helm.values.yaml "remoteControlPlane.api.token" "${KEPTN_CONTROL_PLANE_API_TOKEN}"
-    yq w -i /tmp/helm.values.yaml "distributor.projectFilter" "${KEPTN_EXECUTION_PLANE_PROJECT_FILTER}"
-    yq w -i /tmp/helm.values.yaml "distributor.stageFilter" "${KEPTN_EXECUTION_PLANE_STAGE_FILTER}"
-    yq w -i /tmp/helm.values.yaml "distributor.serviceFilter" "${KEPTN_EXECUTION_PLANE_SERVICE_FILTER}"
-    yq w -i /tmp/helm.values.yaml "remoteControlPlane.api.apiValidateTls" "${KEPTN_CONTROL_PLANE_SSL_VERIFY}"
-    yq w -i /tmp/helm.values.yaml "resources.requests.cpu" "50m"
-    yq w -i /tmp/helm.values.yaml "resources.requests.memory" "128Mi"
-    yq w -i /tmp/helm.values.yaml "resources.limits.cpu" "200m"
-    yq w -i /tmp/helm.values.yaml "resources.limits.memory" "512Mi"
+    curl -fsSL -o $TEMP_FOLDER/helm.values.yaml https://raw.githubusercontent.com/keptn/keptn/release-${KEPTNVERSION}/helm-service/chart/values.yaml
+    yq w -i $TEMP_FOLDER/helm.values.yaml "remoteControlPlane.enabled" "true"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "remoteControlPlane.api.hostname" "${KEPTN_CONTROL_PLANE_DOMAIN}"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "remoteControlPlane.api.token" "${KEPTN_CONTROL_PLANE_API_TOKEN}"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "distributor.projectFilter" "${KEPTN_EXECUTION_PLANE_PROJECT_FILTER}"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "distributor.stageFilter" "${KEPTN_EXECUTION_PLANE_STAGE_FILTER}"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "distributor.serviceFilter" "${KEPTN_EXECUTION_PLANE_SERVICE_FILTER}"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "remoteControlPlane.api.apiValidateTls" "${KEPTN_CONTROL_PLANE_SSL_VERIFY}"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "resources.requests.cpu" "50m"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "resources.requests.memory" "128Mi"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "resources.limits.cpu" "200m"
+    yq w -i $TEMP_FOLDER/helm.values.yaml "resources.limits.memory" "512Mi"
     
-    helm install helm-service https://github.com/keptn/keptn/releases/download/${KEPTNVERSION}/helm-service-${KEPTNVERSION}.tgz -n keptn --create-namespace --values=/tmp/helm.values.yaml
+    helm install helm-service https://github.com/keptn/keptn/releases/download/${KEPTNVERSION}/helm-service-${KEPTNVERSION}.tgz -n keptn --create-namespace --values=$TEMP_FOLDER/helm.values.yaml
 
     # Install the Argo Service for just the demo-rollout project
     apply_manifest_ns_keptn "https://raw.githubusercontent.com/keptn-contrib/argo-service/${ARGO_SERVICE_VERSION}/deploy/service.yaml"
@@ -555,16 +562,16 @@ function install_keptn {
 
     # Install JMeter if the user wants to
     if [[ "${JMETER}" == "true" ]]; then
-      curl -fsSL -o /tmp/jmeter.values.yaml https://raw.githubusercontent.com/keptn/keptn/release-${KEPTNVERSION}/jmeter-service/chart/values.yaml
-      yq w -i /tmp/jmeter.values.yaml "remoteControlPlane.enabled" "true"
-      yq w -i /tmp/jmeter.values.yaml "remoteControlPlane.api.hostname" "${KEPTN_CONTROL_PLANE_DOMAIN}"
-      yq w -i /tmp/jmeter.values.yaml "remoteControlPlane.api.token" "${KEPTN_CONTROL_PLANE_API_TOKEN}"
-      yq w -i /tmp/jmeter.values.yaml "distributor.projectFilter" "${KEPTN_EXECUTION_PLANE_PROJECT_FILTER}"
-      yq w -i /tmp/jmeter.values.yaml "distributor.stageFilter" "${KEPTN_EXECUTION_PLANE_STAGE_FILTER}"
-      yq w -i /tmp/jmeter.values.yaml "distributor.serviceFilter" "${KEPTN_EXECUTION_PLANE_SERVICE_FILTER}"
-      yq w -i /tmp/jmeter.values.yaml "remoteControlPlane.api.apiValidateTls" "${KEPTN_CONTROL_PLANE_SSL_VERIFY}"
+      curl -fsSL -o $TEMP_FOLDER/jmeter.values.yaml https://raw.githubusercontent.com/keptn/keptn/release-${KEPTNVERSION}/jmeter-service/chart/values.yaml
+      yq w -i $TEMP_FOLDER/jmeter.values.yaml "remoteControlPlane.enabled" "true"
+      yq w -i $TEMP_FOLDER/jmeter.values.yaml "remoteControlPlane.api.hostname" "${KEPTN_CONTROL_PLANE_DOMAIN}"
+      yq w -i $TEMP_FOLDER/jmeter.values.yaml "remoteControlPlane.api.token" "${KEPTN_CONTROL_PLANE_API_TOKEN}"
+      yq w -i $TEMP_FOLDER/jmeter.values.yaml "distributor.projectFilter" "${KEPTN_EXECUTION_PLANE_PROJECT_FILTER}"
+      yq w -i $TEMP_FOLDER/jmeter.values.yaml "distributor.stageFilter" "${KEPTN_EXECUTION_PLANE_STAGE_FILTER}"
+      yq w -i $TEMP_FOLDER/jmeter.values.yaml "distributor.serviceFilter" "${KEPTN_EXECUTION_PLANE_SERVICE_FILTER}"
+      yq w -i $TEMP_FOLDER/jmeter.values.yaml "remoteControlPlane.api.apiValidateTls" "${KEPTN_CONTROL_PLANE_SSL_VERIFY}"
 
-      helm install jmeter-service https://github.com/keptn/keptn/releases/download/${KEPTNVERSION}/jmeter-service-${KEPTNVERSION}.tgz -n keptn --create-namespace --values=/tmp/jmeter.values.yaml
+      helm install jmeter-service https://github.com/keptn/keptn/releases/download/${KEPTNVERSION}/jmeter-service-${KEPTNVERSION}.tgz -n keptn --create-namespace --values=$TEMP_FOLDER/jmeter.values.yaml
 
       # no need to additionally install jmeter afterwards as we install it as part of the execution plane anyway!
       JMETER="false"
@@ -589,6 +596,9 @@ function install_keptn {
       "${K3SKUBECTL[@]}" -n keptn set env deployment/monaco-service --containers=monaco-service CONFIGURATION_SERVICE="http://localhost:8081/configuration-service"
       "${K3SKUBECTL[@]}" -n keptn set env deployment/monaco-service --containers=distributor KEPTN_API_ENDPOINT="https://${KEPTN_CONTROL_PLANE_DOMAIN}/api" KEPTN_API_TOKEN="${KEPTN_CONTROL_PLANE_API_TOKEN}" HTTP_SSL_VERIFY="${KEPTN_CONTROL_PLANE_SSL_VERIFY}"
       "${K3SKUBECTL[@]}" -n keptn set env deployment/monaco-service --containers=distributor STAGE_FILTER="${KEPTN_EXECUTION_PLANE_STAGE_FILTER}" SERVICE_FILTER="${KEPTN_EXECUTION_PLANE_SERVICE_FILTER}" PROJECT_FILTER="${KEPTN_EXECUTION_PLANE_PROJECT_FILTER}"
+      # kristof: increase monaco service resources
+      "${K3SKUBECTL[@]}" -n keptn patch deploy monaco-service --type json -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value":"1Gi"}]'
+      "${K3SKUBECTL[@]}" -n keptn patch deploy monaco-service --type json -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/cpu", "value":"2"}]'
     fi 
 
     # Install Locust if the user wants to
@@ -656,7 +666,7 @@ function install_keptn {
     sed -e 's~domain.placeholder~'"$GIT_DOMAIN"'~' \
         -e 's~GIT_USER.placeholder~'"$GIT_USER"'~' \
         -e 's~GIT_PASSWORD.placeholder~'"$GIT_PASSWORD"'~' \
-        ./files/gitea/helm-gitea.yaml > helm-gitea_gen.yaml
+        $REPO_FOLDER/files/gitea/helm-gitea.yaml > helm-gitea_gen.yaml
 
     echo "Install gitea via Helmchart"
     helm install gitea gitea-charts/gitea --version "${GITEA_VERSION}" -f helm-gitea_gen.yaml --namespace git --kubeconfig="${KUBECONFIG}"
@@ -665,7 +675,7 @@ function install_keptn {
     write_progress "Configuring Gitea Ingress Object (${GIT_DOMAIN})"
     sed -e 's~domain.placeholder~'"$GIT_DOMAIN"'~' \
         -e 's~issuer.placeholder~'"$CERTS"'~' \
-        ./files/gitea/gitea-ingress.yaml > gitea-ingress_gen.yaml
+        $REPO_FOLDER/files/gitea/gitea-ingress.yaml > gitea-ingress_gen.yaml
     "${K3SKUBECTL[@]}" apply -n git -f gitea-ingress_gen.yaml
     rm gitea-ingress_gen.yaml    
 
@@ -706,7 +716,7 @@ function install_keptn {
     write_progress "Configuring Keptn Ingress Object (${KEPTN_DOMAIN})"
     sed -e 's~domain.placeholder~'"$KEPTN_DOMAIN"'~' \
       -e 's~issuer.placeholder~'"$CERTS"'~' \
-      ./files/keptn/keptn-ingress.yaml > keptn-ingress_gen.yaml
+      $REPO_FOLDER/files/keptn/keptn-ingress.yaml > keptn-ingress_gen.yaml
     "${K3SKUBECTL[@]}" apply -n keptn -f keptn-ingress_gen.yaml
     rm keptn-ingress_gen.yaml
 
@@ -1231,6 +1241,13 @@ function main {
         NIP="true"
         shift
         ;;
+    --use-custom-domain)
+        echo "Using custom domain $CUSTOMDOMAIN"
+        XIP="false"
+        NIP="false"
+        USECUSTDOMAIN="true"
+        shift
+        ;;
     --controlplane)
         echo "Installing Keptn Control Plane"
         KEPTN_TYPE="controlplane"
@@ -1370,6 +1387,7 @@ function main {
   get_kubectl
 
   if [[ "${INSTALL_TYPE}" == "all" ]]; then
+    mkdir $TEMP_FOLDER
     get_helm
     get_k3s
     get_oneagent    
@@ -1389,6 +1407,7 @@ function main {
   fi
 
   if [[ "${INSTALL_TYPE}" == "k3s" ]]; then
+    mkdir $TEMP_FOLDER
     get_helm
     get_k3s
     get_oneagent    
@@ -1397,6 +1416,7 @@ function main {
   fi
 
   if [[ "${INSTALL_TYPE}" == "keptn" ]]; then
+    mkdir $TEMP_FOLDER
     install_keptn
     install_keptncli
   fi

@@ -6,6 +6,7 @@ PREFIX="https"
 
 KEPTN_CONTROL_PLANE_API_TOKEN=${KEPTN_CONTROL_PLANE_API_TOKEN:-none}
 KEPTN_CONTROL_PLANE_DOMAIN=${KEPTN_CONTROL_PLANE_DOMAIN:-none}
+DELETE_PROJECT=${DELETE_PROJECT:-none}
 
 if [[ "$KEPTN_CONTROL_PLANE_API_TOKEN" != "none" ]] && [[ "$KEPTN_CONTROL_PLANE_DOMAIN" != "none" ]]; then
   keptn auth --api-token "${KEPTN_CONTROL_PLANE_API_TOKEN}" --endpoint "${PREFIX}://$KEPTN_CONTROL_PLANE_DOMAIN/api"
@@ -24,6 +25,10 @@ fi
 # lets first delete secret and project
 # keptn delete secret dynatrace
 keptn delete project dynatrace
+
+if [[ "${DELETE_PROJECT}" != "none" ]]; then
+  keptn delete project $DELETE_PROJECT
+fi 
 
 # now lets create the project and add the default dynatrace.conf.yaml
 keptn create project dynatrace --shipyard=./shipyard.yaml
